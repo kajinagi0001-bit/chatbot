@@ -25,6 +25,8 @@ from openai import OpenAI
 # サーバー設定
 OPENAI_API_URL = "http://192.168.xxx.xxx:xxxx/v1"  # OpenAI互換APIのURL (ローカルLLM)
 TTS_API_URL = "http://192.168.xxx.xxx:xxxx/voice"  # TTS APIのURL
+# 有志が公開している無料のVOICEVOX互換WEB APIのエンドポイント
+VOICEVOX_API_URL = "https://voicevox.su-shiki.com/api"
 openai.api_key = os.getenv("OPENAI_API_KEY") # OpenAI-API（環境変数から取得）
 SERP_API_KEY = os.getenv("SERP_API_KEY")  # 検索API（環境変数から取得）
 
@@ -33,6 +35,7 @@ LLM_MODEL_NAME = "gpt-4o-mini"  # 使用するLLMモデル
 TTS_MODEL_NAME = "【モデル名】"        # 使用するTTS音声モデル
 TTS_LENGTH = 1                  # 音声の長さ調整 (1以上はゆっくり、1未満は早口になる)
 TTS_STYLE_WEIGHT = 1             # 音声スタイルの重み
+VOICEVOX_SPEAKER_ID = 3  #  ずんだもん
 
 # 音声認識設定
 ASR_LANGUAGE = "ja-JP"           # 音声認識の言語
@@ -78,7 +81,7 @@ class BeepSound:
         self.sample_rate = sample_rate
 
         t = np.linspace(0, duration, int(sample_rate * duration), False)
-        self.beed_data = (0.5 * np.sin(2 * np.pi * frequency * t)).astype(np.float32)
+        self.beep_data = (0.5 * np.sin(2 * np.pi * frequency * t)).astype(np.float32)
     
     def play(self, times=1, interval=0.1):
         for i in range(times):
@@ -99,7 +102,7 @@ class ASRModule:
                  idle_timeout=None,
                  listening_timeout=LISTENING_TIMEOUT,
                  energy_threshold=ASR_ENERGY_THRESHOLD,
-                 tts_func=None,-
+                 tts_func=None,
                  play_audio_func=None):
         
         self.recognizer = sr.Recognizer()
@@ -114,20 +117,20 @@ class ASRModule:
         self.conversation_history = []
 
         # 音声認識キャンセル用のフラグとスレッド
-        self.cancel_linstening = threading.Event()
+        self.cancel_listening = threading.Event()
         self.listen_thread = None
 
         # ビープ音の初期化
         self.beep_sound = BeepSound(frequency=1000)
         self.beep_activate = BeepSound(frequency=1200)
-        self.beep_activate = BeepSound(frequency=800)
+        self.beep_deactivate = BeepSound(frequency=800)
 
         # コールバック関数
         self.on_wakeup_callback = None
         self.on_exit_callback = None
         self.on_speech_callback = None
         self.tts_func = tts_func
-        self.play_audio_func = self.play_audio_func
+        self.play_audio_func = play_audio_func
 
     def _normalize_text(self, text):
         """テキストの正規化（小文字化，句読点除去）"""
@@ -248,7 +251,7 @@ class ASRModule:
                 
                 if not text:
                     print("応答がないためアイドルモードに移ります")
-                    self.is_activate = False
+                    self.is_active = False
                     self.beep_deactivate.play(times=2, interval=0.2)
 
                     if self.on_exit_callback:
@@ -337,9 +340,8 @@ def split_text_custom(text, max_length=100):
             segments.append(sentence)
     return segments
 
-def generate_tts_audio(text, tts_api_url=TTS_API_URL, model_name=TTS_MODEL_NAME,
-                       length=TTS_LENGTH, style_weight=TTS_STYLE_WEIGHT):
-    """テキストからTTS音声を生成するためにTTS APIを呼び出す"""
+def generate_tts_audio(text, tts_api_url=VOICEVOX_API_URL, speaker_id=VOICEVOX_SPEAKER_ID):
+    """VOICEVOX APIを呼び出してテキストから音声を生成する"""
     segments = split_text_custom(text)
     combined_audio = None
 
@@ -347,27 +349,39 @@ def generate_tts_audio(text, tts_api_url=TTS_API_URL, model_name=TTS_MODEL_NAME,
         if len(chunk.strip()) <= 1:
             continue
 
-        params = {
-            "text": chunk,
-            "model_name": model_name,
-            "length": length,
-            "split_interval": 0,
-            "style_weight": style_weight
-        }
-
         try:
-            response = requests.get(tts_api_url, params=params)
-            if response.status_code == 200:
-                audio_segment = AudioSegment.from_file(io.BytesIO(response.content), format="wav")
+            # 1. 音声合成用のクエリを作成 (audio_query)
+            query_params = {"text": chunk, "speaker": speaker_id}
+            query_response = requests.post(f"{tts_api_url}/audio_query", params=query_params)
+            
+            if query_response.status_code != 200:
+                print(f"VOICEVOX クエリ作成エラー: HTTP {query_response.status_code}")
+                continue
+            
+            query_data = query_response.json()
+
+            # 2. クエリをもとに音声を合成 (synthesis)
+            synth_params = {"speaker": speaker_id}
+            synth_response = requests.post(
+                f"{tts_api_url}/synthesis", 
+                params=synth_params, 
+                json=query_data
+            )
+            
+            if synth_response.status_code == 200:
+                # 取得したWAVデータをAudioSegmentに変換して結合
+                audio_segment = AudioSegment.from_file(io.BytesIO(synth_response.content), format="wav")
                 if combined_audio is None:
                     combined_audio = audio_segment
                 else:
                     combined_audio += audio_segment
             else:
-                print(f"TTS APIエラー (チャンク: {chunk}，ステータス: {response.status_code})")
+                print(f"VOICEVOX 音声合成エラー: HTTP {synth_response.status_code}")
+                
         except Exception as e:
             print(f"TTS生成エラー: {e}")
 
+    # 分割して生成した音声を一つのWAVデータにまとめて返す
     if combined_audio:
         out_buffer = io.BytesIO()
         combined_audio.export(out_buffer, format="wav")
@@ -479,7 +493,7 @@ def summarize_text(text, instruction, prefix="", suffix="", model=LLM_MODEL_NAME
                 {"role": "user", "content": prompt}
             ],
             max_tokens=max_tokens,
-            temperture=0.2
+            temperature=0.2,
             top_p=0.9
         )
         return response.choices[0].message.content.strip()
@@ -491,7 +505,7 @@ def summarize_conversation(history):
     conversation_text = ""
     for msg in history:
         if msg["role"] in ["user", "assistant"]:
-            conversation_text += f"{msg["role"]}:{msg["content"]}\n"
+            conversation_text += f"{msg['role']}:{msg['content']}\n"
 
     return summarize_text(
         text=conversation_text,
@@ -538,8 +552,8 @@ def generate_response(user_input, conversation_history, system_prompt):
             else:
                 messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_input}]
             
-    elif user_input.startwith("検索:") or "を検索して" in user_input:
-        if user_input.start_with("検索:"):
+    elif user_input.starstwith("検索:") or "を検索して" in user_input:
+        if user_input.startswith("検索:"):
             query = user_input.replace("検索:", "", 1).strip()
         else:
             match = re.search(r"(.*)を検索して", user_input)
