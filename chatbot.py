@@ -29,6 +29,7 @@ TTS_API_URL = "http://192.168.xxx.xxx:xxxx/voice"  # TTS APIのURL
 VOICEVOX_API_URL = "https://voicevox.su-shiki.com/api"
 openai.api_key = os.getenv("OPENAI_API_KEY") # OpenAI-API（環境変数から取得）
 SERP_API_KEY = os.getenv("SERP_API_KEY")  # 検索API（環境変数から取得）
+TTS_QUEST_API_KEY = os.getenv("TTS_QUEST_API_KEY")
 
 # モデル設定
 LLM_MODEL_NAME = "gpt-4o-mini"  # 使用するLLMモデル
@@ -68,7 +69,7 @@ OUTPUT_FILE = os.path.join(OUTPUT_TEMP_DIR, "output.wav")
 #==============================================
 
 # OpenAI APIクライアント初期化
-client = OpenAI(base_url=OPENAI_API_URL)
+client = OpenAI(api_key=openai.api_key)
 
 #==============================================
 # ビープ音モジュール
@@ -298,8 +299,14 @@ class ASRModule:
 
         with sr.Microphone() as source:
             try:
-                self.recognizer.adjust_for_ambient_noise(source, duration=1)
-                print(f"マイク閾値を {self.recognizer.energy_threshold} に設定しました")
+                # マイク閾値の自動調節
+                #self.recognizer.adjust_for_ambient_noise(source, duration=1)
+                #print(f"マイク閾値を {self.recognizer.energy_threshold} に設定しました")
+
+                # マイク閾値の手動選択
+                self.recognizer.energy_threshold = 200
+                self.recognizer.dynamic_energy_threshold = False
+                print(f"マイク閾値を {self.recognizer.energy_threshold} に固定しました")
             except Exception as e:
                 print(f"マイクのセットアップに失敗しました: {e}")
         
@@ -340,8 +347,8 @@ def split_text_custom(text, max_length=100):
             segments.append(sentence)
     return segments
 
-def generate_tts_audio(text, tts_api_url=VOICEVOX_API_URL, speaker_id=VOICEVOX_SPEAKER_ID):
-    """VOICEVOX APIを呼び出してテキストから音声を生成する"""
+def generate_tts_audio(text, speaker_id=3): # ずんだもん(ノーマル)のIDは3
+    """無料Web API (tts.quest V1) を使用して音声を生成する"""
     segments = split_text_custom(text)
     combined_audio = None
 
@@ -350,38 +357,57 @@ def generate_tts_audio(text, tts_api_url=VOICEVOX_API_URL, speaker_id=VOICEVOX_S
             continue
 
         try:
-            # 1. 音声合成用のクエリを作成 (audio_query)
-            query_params = {"text": chunk, "speaker": speaker_id}
-            query_response = requests.post(f"{tts_api_url}/audio_query", params=query_params)
+            # 1. 音声合成のリクエストを送信
+            url = "https://api.tts.quest/v3/voicevox/synthesis"
+            params = {
+                "text": chunk,
+                "speaker": speaker_id,
+                "key": TTS_QUEST_API_KEY
+            }
+            response = requests.get(url, params=params)
             
-            if query_response.status_code != 200:
-                print(f"VOICEVOX クエリ作成エラー: HTTP {query_response.status_code}")
+            if response.status_code != 200:
+                print(f"VOICEVOX リクエストエラー: HTTP {response.status_code}")
                 continue
             
-            query_data = query_response.json()
-
-            # 2. クエリをもとに音声を合成 (synthesis)
-            synth_params = {"speaker": speaker_id}
-            synth_response = requests.post(
-                f"{tts_api_url}/synthesis", 
-                params=synth_params, 
-                json=query_data
-            )
+            data = response.json()
             
-            if synth_response.status_code == 200:
-                # 取得したWAVデータをAudioSegmentに変換して結合
-                audio_segment = AudioSegment.from_file(io.BytesIO(synth_response.content), format="wav")
+            # 2. 生成完了を待機（ポーリング）
+            status_url = data.get("audioStatusUrl")
+            # WAVが取得できない場合はMP3にフォールバック
+            download_url = data.get("wavDownloadUrl") or data.get("mp3DownloadUrl")
+            
+            if not status_url or not download_url:
+                print("APIから正しいURLが取得できませんでした:", data)
+                continue
+
+            while True:
+                status_res = requests.get(status_url)
+                if status_res.status_code == 200:
+                    status_data = status_res.json()
+                    # 音声の準備ができたらループを抜ける
+                    if status_data.get("isAudioReady"):
+                        break
+                time.sleep(0.5)  # サーバー負荷軽減のため0.5秒待機
+
+            # 3. 完成した音声データをダウンロードして結合
+            audio_res = requests.get(download_url)
+            if audio_res.status_code == 200:
+                # 拡張子を判定
+                format_ext = "wav" if "wav" in download_url else "mp3"
+                audio_segment = AudioSegment.from_file(io.BytesIO(audio_res.content), format=format_ext)
+                
                 if combined_audio is None:
                     combined_audio = audio_segment
                 else:
                     combined_audio += audio_segment
             else:
-                print(f"VOICEVOX 音声合成エラー: HTTP {synth_response.status_code}")
+                print(f"音声ダウンロードエラー: HTTP {audio_res.status_code}")
                 
         except Exception as e:
             print(f"TTS生成エラー: {e}")
 
-    # 分割して生成した音声を一つのWAVデータにまとめて返す
+    # 分割生成した音声を結合して出力
     if combined_audio:
         out_buffer = io.BytesIO()
         combined_audio.export(out_buffer, format="wav")
@@ -552,7 +578,7 @@ def generate_response(user_input, conversation_history, system_prompt):
             else:
                 messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_input}]
             
-    elif user_input.starstwith("検索:") or "を検索して" in user_input:
+    elif user_input.startswith("検索:") or "を検索して" in user_input:
         if user_input.startswith("検索:"):
             query = user_input.replace("検索:", "", 1).strip()
         else:
