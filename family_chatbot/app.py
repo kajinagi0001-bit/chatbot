@@ -7,6 +7,7 @@ from .llm import ChatBrain
 from .memory import ConversationMemory
 from .search import WebSearch
 from .speech import SpeechListener
+from .speech_text import prepare_for_speech
 from .tts import VoicevoxTTS
 
 
@@ -28,10 +29,18 @@ def main() -> None:
 
     def answer(text: str) -> None:
         print(f"あなた: {text}")
+        preface = brain.preface_for(text)
+        if preface:
+            speak(preface)
+
         response = brain.respond(text)
         print(f"チャットボット: {response}")
+        speak(response)
+
+    def speak(text: str) -> None:
+        speech_text = prepare_for_speech(text)
         played = False
-        for audio_data in tts.synthesize_parts(response):
+        for audio_data in tts.synthesize_parts(speech_text):
             played = play_audio(audio_data, config.temp_audio_path) or played
         if not played:
             print("音声合成に失敗したため、テキストのみ表示しました。")

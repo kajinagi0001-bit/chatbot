@@ -3,6 +3,7 @@ import re
 from openai import OpenAI
 
 from .config import AppConfig
+from .conversation import ConversationStyle, detect_style
 from .memory import ConversationMemory, summarize_conversation
 from .search import WebSearch
 
@@ -15,28 +16,43 @@ class ChatBrain:
         self.client = OpenAI(api_key=config.openai_api_key)
 
     def respond(self, user_input: str) -> str:
+        style = detect_style(user_input)
         search_result = self._maybe_search(user_input)
         if search_result:
             self.memory.add_user(user_input)
             response = self._complete(
+                style,
                 extra_instruction=(
-                    "次の検索結果を踏まえて、家庭で聞きやすい短さで答えてください。"
-                    "検索結果にないことは断言しないでください。\n\n"
+                    "次の検索結果を参考にしてください。"
+                    "家庭で聞きやすい短さで、結論から自然に答えてください。\n\n"
                     f"{search_result}"
                 )
             )
         elif user_input.strip() == "続けて":
-            response = self._continue_last_response()
+            response = self._continue_last_response(style)
         else:
             self.memory.add_user(user_input)
-            response = self._complete()
+            response = self._complete(style)
 
         self.memory.add_assistant(response)
         self._save_and_summarize_if_needed()
         return response
 
-    def _complete(self, extra_instruction: str | None = None) -> str:
+    def preface_for(self, user_input: str) -> str | None:
+        return detect_style(user_input).preface
+
+    def _complete(self, style: ConversationStyle, extra_instruction: str | None = None) -> str:
         messages = list(self.memory.messages)
+        messages.append({"role": "system", "content": style.instruction})
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "出力はそのまま音声合成します。自然な会話文だけを返してください。"
+                    "見出し、箇条書き、Markdown、URLは使わないでください。"
+                ),
+            }
+        )
         if extra_instruction:
             messages.append({"role": "system", "content": extra_instruction})
 
@@ -51,13 +67,13 @@ class ChatBrain:
         except Exception as error:
             return f"返答の生成中にエラーが発生しました: {error}"
 
-    def _continue_last_response(self) -> str:
+    def _continue_last_response(self, style: ConversationStyle) -> str:
         for message in reversed(self.memory.messages):
             if message.get("role") == "assistant":
                 self.memory.add_user(f"次の文章の続きを自然に話してください:\n{message['content'][-160:]}")
-                return self._complete()
+                return self._complete(style)
         self.memory.add_user("続けて")
-        return self._complete()
+        return self._complete(style)
 
     def _maybe_search(self, user_input: str) -> str | None:
         if user_input.startswith("検索:"):

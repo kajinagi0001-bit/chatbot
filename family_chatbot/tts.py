@@ -1,5 +1,7 @@
 import io
+import queue
 import re
+import threading
 import time
 
 import requests
@@ -8,8 +10,8 @@ from pydub import AudioSegment
 from .config import AppConfig
 
 
-def split_for_speech(text: str, max_length: int = 100) -> list[str]:
-    pattern = r"(?<=[。！？\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\U00002728])"
+def split_for_speech(text: str, max_length: int = 70) -> list[str]:
+    pattern = r"(?<=[。！？、\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\U00002728])"
     chunks = []
     for sentence in re.split(pattern, text):
         sentence = sentence.strip()
@@ -43,14 +45,28 @@ class VoicevoxTTS:
         return output.getvalue()
 
     def synthesize_parts(self, text: str):
-        for chunk in split_for_speech(text):
-            audio_segment = self._synthesize_chunk(chunk)
-            if audio_segment is None:
-                continue
+        audio_queue: queue.Queue[bytes | None] = queue.Queue(maxsize=2)
 
-            output = io.BytesIO()
-            audio_segment.export(output, format="wav")
-            yield output.getvalue()
+        def producer() -> None:
+            try:
+                for chunk in split_for_speech(text):
+                    audio_segment = self._synthesize_chunk(chunk)
+                    if audio_segment is None:
+                        continue
+
+                    output = io.BytesIO()
+                    audio_segment.export(output, format="wav")
+                    audio_queue.put(output.getvalue())
+            finally:
+                audio_queue.put(None)
+
+        threading.Thread(target=producer, daemon=True).start()
+
+        while True:
+            audio_data = audio_queue.get()
+            if audio_data is None:
+                break
+            yield audio_data
 
     def _synthesize_chunk(self, text: str) -> AudioSegment | None:
         try:

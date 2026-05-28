@@ -10,6 +10,9 @@
 - VOICEVOX系の音声合成APIによる返答読み上げ
 - 会話履歴の保存と、長くなった会話の要約
 - `検索: 今日の天気` または `今日の天気を検索して` のような検索
+- 雑談、相談、家事、調べものに合わせた自然な話し分け
+- 長めの処理前に「うん、調べてみるね」のような短い相づち
+- 音声再生中に次の文を先読み合成して、発声間の待ち時間を短縮
 
 ## セットアップ
 
@@ -78,8 +81,10 @@ CHATBOT_ENERGY_THRESHOLD=400
 - `chatbot.py`: 起動用の入口
 - `family_chatbot/app.py`: アプリ全体の流れ
 - `family_chatbot/config.py`: 設定と家庭向けプロンプト
+- `family_chatbot/conversation.py`: 会話タイプ判定と話し方の調整
 - `family_chatbot/llm.py`: OpenAI APIによる返答生成
 - `family_chatbot/memory.py`: 会話履歴の保存と要約
+- `family_chatbot/speech_text.py`: 読み上げ前のテキスト整形
 - `family_chatbot/speech.py`: 音声認識と呼びかけ待機
 - `family_chatbot/tts.py`: VOICEVOX系TTS API連携
 - `family_chatbot/audio.py`: ビープ音と音声再生
