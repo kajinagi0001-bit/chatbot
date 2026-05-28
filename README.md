@@ -35,7 +35,12 @@ SERP_API_KEY=your-serp-api-key
 `SERP_API_KEY` は検索機能を使う場合のみ必要です。
 `.env` はGit管理から除外しているため、APIキーを毎回入力する必要はありません。
 
-Raspberry Pi で音声を使う場合は、Pythonパッケージに加えてマイク、スピーカー、PortAudio、ffmpeg などのOS側セットアップが必要になることがあります。
+Raspberry Pi で音声を使う場合は、Pythonパッケージに加えてマイク、スピーカー、PortAudio、ffmpeg、flac などのOS側セットアップが必要になることがあります。
+
+```bash
+sudo apt update
+sudo apt install -y portaudio19-dev ffmpeg flac
+```
 
 ## 起動
 
@@ -49,6 +54,16 @@ python chatbot.py
 - `voice`: 一度だけ音声入力
 - `listen`: 呼びかけ待機を開始
 - `exit`: 終了
+
+音声待機の調整は `.env` で変更できます。
+
+```env
+CHATBOT_LISTENING_TIMEOUT=15
+CHATBOT_ACTIVE_SILENCE_RETRIES=2
+CHATBOT_ENERGY_THRESHOLD=400
+```
+
+`CHATBOT_LISTENING_TIMEOUT` は呼びかけ後に発話を待つ秒数、`CHATBOT_ACTIVE_SILENCE_RETRIES` は無音でも待機へ戻らず追加で待つ回数です。待機に戻るのが速い場合は、この2つを少し大きくしてください。
 
 呼びかけ例:
 

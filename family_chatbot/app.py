@@ -30,8 +30,11 @@ def main() -> None:
         print(f"あなた: {text}")
         response = brain.respond(text)
         print(f"チャットボット: {response}")
-        audio_data = tts.synthesize(response)
-        play_audio(audio_data, config.temp_audio_path)
+        played = False
+        for audio_data in tts.synthesize_parts(response):
+            played = play_audio(audio_data, config.temp_audio_path) or played
+        if not played:
+            print("音声合成に失敗したため、テキストのみ表示しました。")
 
     def start_wakeup_thread() -> None:
         nonlocal wakeup_thread

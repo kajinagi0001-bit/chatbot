@@ -1,3 +1,4 @@
+import shutil
 import threading
 import time
 from collections.abc import Callable
@@ -11,6 +12,7 @@ from .config import AppConfig, EXIT_PHRASES, WAKEUP_PHRASES
 class SpeechListener:
     def __init__(self, config: AppConfig):
         self.config = config
+        self.has_flac = shutil.which("flac") is not None
         self.recognizer = sr.Recognizer()
         self.recognizer.energy_threshold = config.speech_energy_threshold
         self.recognizer.dynamic_energy_threshold = False
@@ -34,6 +36,10 @@ class SpeechListener:
         return text
 
     def run_wakeup_loop(self, on_speech: Callable[[str], None]) -> None:
+        if not self.has_flac:
+            print("音声認識に必要な flac が見つかりません。Raspberry Piで `sudo apt install -y flac` を実行してください。")
+            return
+
         self.is_running = True
         print("音声待機を開始しました。呼びかけると会話を始めます。")
         self.done_beep.play()
@@ -59,24 +65,36 @@ class SpeechListener:
 
     def _run_active_loop(self, on_speech: Callable[[str], None]) -> None:
         self.is_active = True
+        silence_count = 0
         self.ready_beep.play()
         print("聞いています。")
 
         while self.is_running and self.is_active:
             text = self._listen_with_timeout(self.config.listening_timeout_seconds)
             if not text:
+                silence_count += 1
+                if silence_count <= self.config.active_silence_retries:
+                    print("もう少し待っています。")
+                    continue
                 print("反応がないため待機に戻ります。")
-                self.is_active = False
-                self.sleep_beep.play(times=2)
+                self._return_to_idle()
                 return
             if self._contains_any_phrase(text, EXIT_PHRASES):
                 print("待機に戻ります。")
-                self.is_active = False
-                self.sleep_beep.play(times=2)
+                self._return_to_idle()
                 return
+            silence_count = 0
             on_speech(text)
 
+    def _return_to_idle(self) -> None:
+        self.is_active = False
+        self.sleep_beep.play(times=2)
+
     def _listen_with_timeout(self, timeout: int) -> str | None:
+        if not self.has_flac:
+            print("音声認識に必要な flac が見つかりません。Raspberry Piで `sudo apt install -y flac` を実行してください。")
+            return None
+
         self.cancel_listening.clear()
         result = [None]
 

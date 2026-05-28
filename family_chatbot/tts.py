@@ -42,6 +42,16 @@ class VoicevoxTTS:
         combined_audio.export(output, format="wav")
         return output.getvalue()
 
+    def synthesize_parts(self, text: str):
+        for chunk in split_for_speech(text):
+            audio_segment = self._synthesize_chunk(chunk)
+            if audio_segment is None:
+                continue
+
+            output = io.BytesIO()
+            audio_segment.export(output, format="wav")
+            yield output.getvalue()
+
     def _synthesize_chunk(self, text: str) -> AudioSegment | None:
         try:
             response = requests.get(
