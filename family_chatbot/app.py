@@ -3,6 +3,7 @@ import time
 
 from .audio import play_audio
 from .config import AppConfig, DEFAULT_SYSTEM_PROMPT
+from .family import FamilyStore
 from .llm import ChatBrain
 from .memory import ConversationMemory
 from .search import WebSearch
@@ -18,7 +19,8 @@ def main() -> None:
         return
 
     memory = ConversationMemory(config.conversation_log_path, DEFAULT_SYSTEM_PROMPT)
-    brain = ChatBrain(config, memory, WebSearch(config))
+    family = FamilyStore.load(config.family_state_path)
+    brain = ChatBrain(config, memory, WebSearch(config), family)
     tts = VoicevoxTTS(config)
     listener = SpeechListener(config)
 
@@ -29,6 +31,13 @@ def main() -> None:
 
     def answer(text: str) -> None:
         print(f"あなた: {text}")
+        command_result = family.handle_command(text)
+        if command_result.handled:
+            response = command_result.message or "うん、できたよ。"
+            print(f"チャットボット: {response}")
+            speak(response)
+            return
+
         preface = brain.preface_for(text)
         if preface:
             speak(preface)

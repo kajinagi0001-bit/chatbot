@@ -4,15 +4,17 @@ from openai import OpenAI
 
 from .config import AppConfig
 from .conversation import ConversationStyle, detect_style
+from .family import FamilyStore
 from .memory import ConversationMemory, summarize_conversation
 from .search import WebSearch
 
 
 class ChatBrain:
-    def __init__(self, config: AppConfig, memory: ConversationMemory, search: WebSearch):
+    def __init__(self, config: AppConfig, memory: ConversationMemory, search: WebSearch, family: FamilyStore):
         self.config = config
         self.memory = memory
         self.search = search
+        self.family = family
         self.client = OpenAI(api_key=config.openai_api_key)
 
     def respond(self, user_input: str) -> str:
@@ -43,6 +45,16 @@ class ChatBrain:
 
     def _complete(self, style: ConversationStyle, extra_instruction: str | None = None) -> str:
         messages = list(self.memory.messages)
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "以下は家族ごとの記憶です。自然に必要な範囲だけ使い、"
+                    "覚えている情報を大げさに言いすぎないでください。\n"
+                    f"{self.family.context_for_prompt()}"
+                ),
+            }
+        )
         messages.append({"role": "system", "content": style.instruction})
         messages.append(
             {

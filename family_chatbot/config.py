@@ -26,6 +26,7 @@ class AppConfig:
     speech_energy_threshold: int = int(os.getenv("CHATBOT_ENERGY_THRESHOLD", "400"))
 
     conversation_log_path: Path = PROJECT_ROOT / "conversation_log.json"
+    family_state_path: Path = PROJECT_ROOT / "data" / "family_state.json"
     temp_audio_path: Path = Path(gettempdir()) / "family_chatbot_output.wav"
 
     save_interval_turns: int = 5
