@@ -17,15 +17,23 @@
 pip install -r requirements.txt
 ```
 
-環境変数を設定してください。
+APIキーは、プロジェクト直下の `.env` に保存できます。
+まず `.env.example` をコピーして `.env` を作り、値を書き換えてください。
 
 ```powershell
-$env:OPENAI_API_KEY="your-openai-api-key"
-$env:TTS_QUEST_API_KEY="your-tts-quest-api-key"
-$env:SERP_API_KEY="your-serp-api-key"
+Copy-Item .env.example .env
+```
+
+`.env` の例:
+
+```env
+OPENAI_API_KEY=your-openai-api-key
+TTS_QUEST_API_KEY=your-tts-quest-api-key
+SERP_API_KEY=your-serp-api-key
 ```
 
 `SERP_API_KEY` は検索機能を使う場合のみ必要です。
+`.env` はGit管理から除外しているため、APIキーを毎回入力する必要はありません。
 
 Raspberry Pi で音声を使う場合は、Pythonパッケージに加えてマイク、スピーカー、PortAudio、ffmpeg などのOS側セットアップが必要になることがあります。
 
