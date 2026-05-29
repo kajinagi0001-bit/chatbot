@@ -27,12 +27,13 @@ def split_for_speech(text: str, max_length: int = 70) -> list[str]:
 class VoicevoxTTS:
     def __init__(self, config: AppConfig):
         self.config = config
+        self.speed = min(1.4, max(0.8, config.tts_speed))
 
     def synthesize(self, text: str) -> bytes | None:
         combined_audio = None
 
         for chunk in split_for_speech(text):
-            audio_segment = self._synthesize_chunk(chunk)
+            audio_segment = self._speed_adjust(self._synthesize_chunk(chunk))
             if audio_segment is None:
                 continue
             combined_audio = audio_segment if combined_audio is None else combined_audio + audio_segment
@@ -50,7 +51,7 @@ class VoicevoxTTS:
         def producer() -> None:
             try:
                 for chunk in split_for_speech(text):
-                    audio_segment = self._synthesize_chunk(chunk)
+                    audio_segment = self._speed_adjust(self._synthesize_chunk(chunk))
                     if audio_segment is None:
                         continue
 
@@ -118,3 +119,13 @@ class VoicevoxTTS:
 
         print("TTS生成がタイムアウトしました。")
         return False
+
+    def _speed_adjust(self, audio_segment: AudioSegment | None) -> AudioSegment | None:
+        if audio_segment is None or self.speed == 1.0:
+            return audio_segment
+
+        adjusted = audio_segment._spawn(
+            audio_segment.raw_data,
+            overrides={"frame_rate": int(audio_segment.frame_rate * self.speed)},
+        )
+        return adjusted.set_frame_rate(audio_segment.frame_rate)

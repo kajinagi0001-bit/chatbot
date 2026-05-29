@@ -26,6 +26,7 @@ class AppConfig:
     speech_pause_threshold_seconds: float = float(os.getenv("CHATBOT_SPEECH_PAUSE_THRESHOLD", "2.2"))
     speech_phrase_time_limit_seconds: int = int(os.getenv("CHATBOT_SPEECH_PHRASE_LIMIT", "45"))
     speech_energy_threshold: int = int(os.getenv("CHATBOT_ENERGY_THRESHOLD", "400"))
+    tts_speed: float = float(os.getenv("CHATBOT_TTS_SPEED", "1.1"))
 
     conversation_log_path: Path = PROJECT_ROOT / "conversation_log.json"
     family_state_path: Path = PROJECT_ROOT / "data" / "family_state.json"
