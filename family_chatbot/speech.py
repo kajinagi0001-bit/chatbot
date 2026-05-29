@@ -16,6 +16,8 @@ class SpeechListener:
         self.recognizer = sr.Recognizer()
         self.recognizer.energy_threshold = config.speech_energy_threshold
         self.recognizer.dynamic_energy_threshold = False
+        self.recognizer.pause_threshold = config.speech_pause_threshold_seconds
+        self.recognizer.non_speaking_duration = min(0.8, config.speech_pause_threshold_seconds / 2)
 
         self.is_running = False
         self.is_active = False
@@ -28,7 +30,10 @@ class SpeechListener:
 
     def listen_once(self, timeout: int | None = None) -> str | None:
         self.ready_beep.play()
-        text = self._listen_with_timeout(timeout or self.config.listening_timeout_seconds)
+        text = self._listen_with_timeout(
+            timeout or self.config.listening_timeout_seconds,
+            phrase_time_limit=self.config.speech_phrase_time_limit_seconds,
+        )
         if text:
             self.done_beep.play()
         else:
@@ -46,7 +51,10 @@ class SpeechListener:
 
         while self.is_running:
             try:
-                text = self._listen_with_timeout(self.config.idle_listen_timeout_seconds)
+                text = self._listen_with_timeout(
+                    self.config.idle_listen_timeout_seconds,
+                    phrase_time_limit=self.config.idle_listen_timeout_seconds,
+                )
                 if not text:
                     continue
                 if self._contains_any_phrase(text, WAKEUP_PHRASES):
@@ -70,7 +78,10 @@ class SpeechListener:
         print("聞いています。")
 
         while self.is_running and self.is_active:
-            text = self._listen_with_timeout(self.config.listening_timeout_seconds)
+            text = self._listen_with_timeout(
+                self.config.listening_timeout_seconds,
+                phrase_time_limit=self.config.speech_phrase_time_limit_seconds,
+            )
             if not text:
                 silence_count += 1
                 if silence_count <= self.config.active_silence_retries:
@@ -90,7 +101,7 @@ class SpeechListener:
         self.is_active = False
         self.sleep_beep.play(times=2)
 
-    def _listen_with_timeout(self, timeout: int) -> str | None:
+    def _listen_with_timeout(self, timeout: int, phrase_time_limit: int) -> str | None:
         if not self.has_flac:
             print("音声認識に必要な flac が見つかりません。Raspberry Piで `sudo apt install -y flac` を実行してください。")
             return None
@@ -101,7 +112,7 @@ class SpeechListener:
         def listen_worker() -> None:
             try:
                 with sr.Microphone() as source:
-                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=timeout)
+                    audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
                 if self.cancel_listening.is_set():
                     return
                 result[0] = self.recognizer.recognize_google(audio, language=self.config.speech_language)
@@ -117,7 +128,7 @@ class SpeechListener:
 
         self.listen_thread = threading.Thread(target=listen_worker, daemon=True)
         self.listen_thread.start()
-        self.listen_thread.join(timeout + 1)
+        self.listen_thread.join(timeout + phrase_time_limit + int(self.config.speech_pause_threshold_seconds) + 2)
 
         if self.listen_thread.is_alive():
             self.cancel_listening.set()

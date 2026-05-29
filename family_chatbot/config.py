@@ -23,6 +23,8 @@ class AppConfig:
     listening_timeout_seconds: int = int(os.getenv("CHATBOT_LISTENING_TIMEOUT", "15"))
     idle_listen_timeout_seconds: int = int(os.getenv("CHATBOT_IDLE_TIMEOUT", "10"))
     active_silence_retries: int = int(os.getenv("CHATBOT_ACTIVE_SILENCE_RETRIES", "2"))
+    speech_pause_threshold_seconds: float = float(os.getenv("CHATBOT_SPEECH_PAUSE_THRESHOLD", "2.2"))
+    speech_phrase_time_limit_seconds: int = int(os.getenv("CHATBOT_SPEECH_PHRASE_LIMIT", "45"))
     speech_energy_threshold: int = int(os.getenv("CHATBOT_ENERGY_THRESHOLD", "400"))
 
     conversation_log_path: Path = PROJECT_ROOT / "conversation_log.json"
