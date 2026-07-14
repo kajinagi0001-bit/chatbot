@@ -6,3 +6,4 @@ venv/
 conversation_log.json
 data/
 family_chatbot_output.wav
+chatbot.egg-info

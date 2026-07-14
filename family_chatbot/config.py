@@ -27,6 +27,9 @@ class AppConfig:
     speech_phrase_time_limit_seconds: int = int(os.getenv("CHATBOT_SPEECH_PHRASE_LIMIT", "45"))
     speech_energy_threshold: int = int(os.getenv("CHATBOT_ENERGY_THRESHOLD", "400"))
     tts_speed: float = float(os.getenv("CHATBOT_TTS_SPEED", "1.1"))
+    search_result_count: int = int(os.getenv("CHATBOT_SEARCH_RESULT_COUNT", "6"))
+    search_fetch_pages: bool = os.getenv("CHATBOT_SEARCH_FETCH_PAGES", "true").lower() in {"1", "true", "yes", "on"}
+    search_page_char_limit: int = int(os.getenv("CHATBOT_SEARCH_PAGE_CHAR_LIMIT", "1800"))
 
     conversation_log_path: Path = PROJECT_ROOT / "conversation_log.json"
     family_state_path: Path = PROJECT_ROOT / "data" / "family_state.json"
@@ -35,6 +38,7 @@ class AppConfig:
     save_interval_turns: int = 5
     summary_interval_turns: int = 40
     max_response_tokens: int = 240
+    search_answer_tokens: int = int(os.getenv("CHATBOT_SEARCH_ANSWER_TOKENS", "850"))
 
 
 WAKEUP_PHRASES = ["ねえ", "おはよう", "こんにちは", "こんばんは", "チャットさん"]
@@ -54,5 +58,6 @@ DEFAULT_SYSTEM_PROMPT = (
     "生活支援の話では、できるだけ具体的な時刻、順番、量、持ち物、確認事項を含めてください。"
     "情報が足りない場合は、仮の提案をしたうえで確認質問を1つだけしてください。"
     "知らないことは推測で断言せず、必要なら検索を提案してください。"
+    "会話に適度にふざけを入れて、親しみやすくしてください。"
     f"会話スタイル: {DEFAULT_FEEDBACK}"
 )

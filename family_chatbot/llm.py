@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 
 from openai import OpenAI
 
@@ -7,6 +8,9 @@ from .conversation import ConversationStyle, detect_style
 from .family import FamilyStore
 from .memory import ConversationMemory, summarize_conversation
 from .search import WebSearch
+
+
+WEEKDAYS_JA = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
 
 
 class ChatBrain:
@@ -25,10 +29,14 @@ class ChatBrain:
             response = self._complete(
                 style,
                 extra_instruction=(
-                    "次の検索結果を参考にしてください。"
-                    "家庭で聞きやすい短さで、結論から自然に答えてください。\n\n"
+                    '次の検索結果を根拠として使ってください。'
+                    '検索を求められた場合は、多少長くなってもよいので具体的に答えてください。'
+                    '結論、重要な具体情報、家庭での判断材料、次の行動の順で、5〜8文を目安に返してください。'
+                    '出典名、日付、場所、価格、営業時間、持ち物、注意点、手順があれば優先して含めてください。'
+                    '検索結果にないことは補わず、不明点は不明と言ってください。\n\n'
                     f"{search_result}"
-                )
+                ),
+                max_tokens=self.config.search_answer_tokens,
             )
         elif user_input.strip() == "続けて":
             response = self._continue_last_response(style)
@@ -43,8 +51,15 @@ class ChatBrain:
     def preface_for(self, user_input: str) -> str | None:
         return detect_style(user_input).preface
 
-    def _complete(self, style: ConversationStyle, extra_instruction: str | None = None) -> str:
+
+    def _current_datetime_context(self) -> str:
+        now = datetime.now()
+        weekday = WEEKDAYS_JA[now.weekday()]
+        return f"現在日時: {now.year}年{now.month}月{now.day}日 {weekday} {now.hour}時{now.minute:02d}分"
+
+    def _complete(self, style: ConversationStyle, extra_instruction: str | None = None, max_tokens: int | None = None) -> str:
         messages = list(self.memory.messages)
+        messages.append({"role": "system", "content": self._current_datetime_context()})
         messages.append(
             {
                 "role": "system",
@@ -75,7 +90,7 @@ class ChatBrain:
             response = self.client.chat.completions.create(
                 model=self.config.llm_model,
                 messages=messages,
-                max_tokens=self.config.max_response_tokens,
+                max_tokens=max_tokens or self.config.max_response_tokens,
                 temperature=0.8,
             )
             return response.choices[0].message.content.strip()

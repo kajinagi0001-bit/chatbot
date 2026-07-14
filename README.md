@@ -40,6 +40,16 @@ SERP_API_KEY=your-serp-api-key
 `SERP_API_KEY` は検索機能を使う場合のみ必要です。
 `.env` はGit管理から除外しているため、APIキーを毎回入力する必要はありません。
 
+検索結果を詳しくしたい場合は、`.env` で調整できます。
+
+```env
+CHATBOT_SEARCH_RESULT_COUNT=5
+CHATBOT_SEARCH_FETCH_PAGES=true
+CHATBOT_SEARCH_PAGE_CHAR_LIMIT=900
+```
+
+`CHATBOT_SEARCH_FETCH_PAGES=true` にすると、検索結果の上位ページを短く読み取り、スニペットだけでなく本文抜粋も会話に使います。少し遅くなる場合は `false` にしてください。
+
 Raspberry Pi で音声を使う場合は、Pythonパッケージに加えてマイク、スピーカー、PortAudio、ffmpeg、flac などのOS側セットアップが必要になることがあります。
 
 ```bash

@@ -1,4 +1,5 @@
 import threading
+from datetime import datetime
 import time
 
 from .audio import play_audio
@@ -11,6 +12,31 @@ from .speech import SpeechListener
 from .speech_text import prepare_for_speech
 from .tts import VoicevoxTTS
 
+
+WEEKDAYS_JA = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
+
+def local_datetime_response(text: str) -> str | None:
+    normalized = text.strip().replace("？", "?")
+    now = datetime.now()
+    date_text = f"{now.year}年{now.month}月{now.day}日"
+    time_text = f"{now.hour}時{now.minute:02d}分"
+    weekday_text = WEEKDAYS_JA[now.weekday()]
+
+    asks_date = any(word in normalized for word in ["今日の日付", "今日は何日", "日付を教えて", "日付は"])
+    asks_time = any(word in normalized for word in ["今何時", "いま何時", "現在時刻", "今の時刻", "時間を教えて"])
+    asks_weekday = any(word in normalized for word in ["何曜日", "曜日を教えて", "曜日は"])
+
+    if asks_date and asks_time and asks_weekday:
+        return f"今日は{date_text}、{weekday_text}。今は{time_text}だよ。"
+    if asks_date and asks_weekday:
+        return f"今日は{date_text}、{weekday_text}だよ。"
+    if asks_date:
+        return f"今日は{date_text}だよ。"
+    if asks_time:
+        return f"今は{time_text}だよ。"
+    if asks_weekday:
+        return f"今日は{weekday_text}だよ。"
+    return None
 
 def main() -> None:
     config = AppConfig()
@@ -31,6 +57,12 @@ def main() -> None:
 
     def answer(text: str) -> None:
         print(f"あなた: {text}")
+        local_response = local_datetime_response(text)
+        if local_response:
+            print(f"???????: {local_response}")
+            speak(local_response)
+            return
+
         command_result = family.handle_command(text)
         if command_result.handled:
             response = command_result.message or "うん、できたよ。"
