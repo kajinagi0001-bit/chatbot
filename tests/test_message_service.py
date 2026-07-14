@@ -264,3 +264,20 @@ def test_unrelated_text_is_not_handled():
     assert result.handled is False
     assert state["messages"] == []
     assert save_count["value"] == 0
+
+def test_send_message_directly():
+    service, state, save_count = make_service(
+        current_member="凪"
+    )
+
+    result = service.send_message(
+        recipient="お母さん",
+        body="帰りに牛乳お願い",
+    )
+
+    assert result.handled is True
+    assert state["messages"][0]["to"] == "お母さん"
+    assert state["messages"][0]["text"] == (
+        "帰りに牛乳お願い"
+    )
+    assert save_count["value"] == 1

@@ -175,3 +175,37 @@ def test_unrelated_text_is_not_handled():
     assert result.handled is False
     assert state["shopping_list"] == []
     assert save_count["value"] == 0
+
+def test_add_item_directly():
+    service, state, save_count = make_service(
+        current_member="凪"
+    )
+
+    result = service.add_item("牛乳")
+
+    assert result.handled is True
+    assert state["shopping_list"][0]["text"] == "牛乳"
+    assert state["shopping_list"][0]["added_by"] == "凪"
+    assert save_count["value"] == 1
+
+
+def test_complete_item_directly():
+    state = {
+        "shopping_list": [
+            {
+                "id": "item1",
+                "text": "牛乳",
+                "done": False,
+            }
+        ]
+    }
+
+    service, _, save_count = make_service(
+        state=state
+    )
+
+    result = service.complete_item("牛乳")
+
+    assert result.handled is True
+    assert state["shopping_list"][0]["done"] is True
+    assert save_count["value"] == 1

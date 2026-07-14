@@ -42,12 +42,19 @@ class ShoppingService:
             if not item.get("done")
         ]
 
-    def _handle_add(self, text: str) -> CommandResult:
+    def _handle_add(
+        self,
+        text: str,
+    ) -> CommandResult:
         if not (
             "買い物" in text
             and any(
                 word in text
-                for word in ["入れて", "追加", "買う"]
+                for word in [
+                    "入れて",
+                    "追加",
+                    "買う",
+                ]
             )
         ):
             return CommandResult(False)
@@ -63,50 +70,31 @@ class ShoppingService:
 
         item = self._clean_item(item)
 
-        if not item:
-            return CommandResult(False)
+        return self.add_item(item)
 
-        self.state["shopping_list"].append(
-            {
-                "id": self._new_id(),
-                "text": item,
-                "added_by": self.current_member,
-                "done": False,
-                "created_at": self._now(),
-            }
-        )
-
-        self.save()
-
-        return CommandResult(
-            True,
-            f"買い物メモに「{item}」を入れたよ。",
-        )
-
-    def _handle_show(self, text: str) -> CommandResult:
+    def _handle_show(
+        self,
+        text: str,
+    ) -> CommandResult:
         if not (
             "買い物" in text
             and any(
                 word in text
-                for word in ["見せて", "教えて", "リスト"]
+                for word in [
+                    "見せて",
+                    "教えて",
+                    "リスト",
+                ]
             )
         ):
             return CommandResult(False)
 
-        items = self.active_item_names()
+        return self.show_items()
 
-        if not items:
-            return CommandResult(
-                True,
-                "買い物メモは空だよ。",
-            )
-
-        return CommandResult(
-            True,
-            "買い物メモは、" + "、".join(items) + "だよ。",
-        )
-
-    def _handle_complete(self, text: str) -> CommandResult:
+    def _handle_complete(
+        self,
+        text: str,
+    ) -> CommandResult:
         match = re.match(
             r"^(.+?)(?:を)?(?:買った|買いました)$",
             text,
@@ -122,24 +110,7 @@ class ShoppingService:
             item_text,
         ).strip()
 
-        for item in self.state["shopping_list"]:
-            if item.get("done"):
-                continue
-
-            if item_text not in item["text"]:
-                continue
-
-            item["done"] = True
-            item["done_at"] = self._now()
-
-            self.save()
-
-            return CommandResult(
-                True,
-                f"うん、「{item['text']}」は買ったことにしたよ。",
-            )
-
-        return CommandResult(False)
+        return self.complete_item(item_text)
 
     @staticmethod
     def _extract_after_keywords(
@@ -183,4 +154,102 @@ class ShoppingService:
     def _now() -> str:
         return datetime.now().isoformat(
             timespec="seconds"
+        )
+    
+    def add_item(
+        self,
+        item_text: str,
+    ) -> CommandResult:
+        item_text = item_text.strip(" 、。")
+
+        if not item_text:
+            return CommandResult(
+                False,
+                "追加する商品が分からなかったよ。",
+            )
+
+        self.state["shopping_list"].append(
+            {
+                "id": self._new_id(),
+                "text": item_text,
+                "added_by": self.current_member,
+                "done": False,
+                "created_at": self._now(),
+            }
+        )
+
+        self.save()
+
+        return CommandResult(
+            True,
+            f"買い物メモに「{item_text}」を入れたよ。",
+        )
+
+    def show_items(self) -> CommandResult:
+        items = self.active_item_names()
+
+        if not items:
+            return CommandResult(
+                True,
+                "買い物メモは空だよ。",
+            )
+
+        return CommandResult(
+            True,
+            "買い物メモは、"
+            + "、".join(items)
+            + "だよ。",
+        )
+    
+    def complete_item(
+        self,
+        item_text: str,
+    ) -> CommandResult:
+        item_text = item_text.strip(" 、。")
+
+        if not item_text:
+            return CommandResult(
+                False,
+                "買った商品が分からなかったよ。",
+            )
+
+        for item in self.state["shopping_list"]:
+            if item.get("done"):
+                continue
+
+            if not self._items_match(
+                expected=item["text"],
+                requested=item_text,
+            ):
+                continue
+
+            item["done"] = True
+            item["done_at"] = self._now()
+
+            self.save()
+
+            return CommandResult(
+                True,
+                f"うん、「{item['text']}」は"
+                "買ったことにしたよ。",
+            )
+
+        return CommandResult(
+            False,
+            f"買い物メモに「{item_text}」は"
+            "見つからなかったよ。",
+        )
+
+    @staticmethod
+    def _items_match(
+        expected: str,
+        requested: str,
+    ) -> bool:
+        expected = expected.strip().lower()
+        requested = requested.strip().lower()
+
+        return (
+            expected == requested
+            or requested in expected
+            or expected in requested
         )

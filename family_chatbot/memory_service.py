@@ -243,3 +243,87 @@ class MemoryService:
 
         values.append(value)
         return True
+
+    def add_personal_note(
+        self,
+        note: str,
+    ) -> CommandResult:
+        note = note.strip(" 、。")
+
+        if not note:
+            return CommandResult(
+                False,
+                "覚える内容が分からなかったよ。",
+            )
+
+        member = self.get_member(
+            self.current_member
+        )
+        notes = member.setdefault("notes", [])
+
+        added = self._append_unique(notes, note)
+
+        if added:
+            self.save()
+
+        return CommandResult(
+            True,
+            f"「{note}」を覚えておくね。",
+        )
+    
+    def add_shared_note(
+        self,
+        note: str,
+    ) -> CommandResult:
+        note = note.strip(" 、。")
+
+        if not note:
+            return CommandResult(
+                False,
+                "覚える内容が分からなかったよ。",
+            )
+
+        notes = self.state["shared"]["notes"]
+        added = self._append_unique(notes, note)
+
+        if added:
+            self.save()
+
+        return CommandResult(
+            True,
+            f"家族のこととして「{note}」を"
+            "覚えておくね。",
+        )
+
+    def add_preference(
+        self,
+        preference: str,
+    ) -> CommandResult:
+        preference = preference.strip(" 、。")
+
+        if not preference:
+            return CommandResult(
+                False,
+                "好みの内容が分からなかったよ。",
+            )
+
+        member = self.get_member(
+            self.current_member
+        )
+        preferences = member.setdefault(
+            "preferences",
+            [],
+        )
+
+        added = self._append_unique(
+            preferences,
+            preference,
+        )
+
+        if added:
+            self.save()
+
+        return CommandResult(
+            True,
+            f"「{preference}」って覚えておくね。",
+        )

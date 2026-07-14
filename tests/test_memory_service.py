@@ -245,3 +245,18 @@ def test_unrelated_text_is_not_handled():
     assert state["members"]["guest"]["notes"] == []
     assert state["shared"]["notes"] == []
     assert save_count["value"] == 0
+
+def test_add_personal_note_directly():
+    service, state, save_count = make_service(
+        current_member="凪"
+    )
+
+    result = service.add_personal_note(
+        "朝は短く話してほしい"
+    )
+
+    assert result.handled is True
+    assert state["members"]["凪"]["notes"] == [
+        "朝は短く話してほしい"
+    ]
+    assert save_count["value"] == 1

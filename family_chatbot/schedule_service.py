@@ -76,61 +76,33 @@ class ScheduleService:
 
         return f"{date}に{title}"
 
-    def _add_event(self, text: str) -> CommandResult:
-        owner = (
-            self._extract_owner(text)
-            or self.current_member
+    def _add_event(
+        self,
+        text: str,
+    ) -> CommandResult:
+        owner = self._extract_owner(text)
+        title = self._clean_schedule_title(
+            self._extract_schedule_title(text)
         )
 
-        title = self._extract_schedule_title(text)
-
-        event = {
-            "id": self._new_id(),
-            "owner": owner,
-            "title": self._clean_schedule_title(title),
-            "date": self._extract_date_label(text),
-            "time": self._extract_time(text),
-            "note": "",
-            "created_at": self._now(),
-        }
-
-        self.state["events"].append(event)
-        self.save()
-
-        owner_name = self._owner_name(owner)
-
-        return CommandResult(
-            True,
-            (
-                f"{owner_name}の予定に"
-                f"「{self.format_event(event)}」を入れたよ。"
-            ),
+        return self.add_event(
+            title=title,
+            date=self._extract_date_label(text),
+            time=self._extract_time(text),
+            owner=owner,
         )
 
-    def _show_events(self, text: str) -> CommandResult:
+    def _show_events(
+        self,
+        text: str,
+    ) -> CommandResult:
         owner = (
-            None
+            "家族"
             if "家族" in text or "全員" in text
-            else self.current_member
+            else None
         )
 
-        events = self.events_for(owner)[:6]
-
-        if not events:
-            return CommandResult(
-                True,
-                "今のところ予定は入っていないよ。",
-            )
-
-        formatted = "。".join(
-            self.format_event(event)
-            for event in events
-        )
-
-        return CommandResult(
-            True,
-            f"予定は、{formatted}。",
-        )
+        return self.show_events(owner=owner)
 
     def _extract_owner(
         self,
@@ -307,4 +279,138 @@ class ScheduleService:
     def _now() -> str:
         return datetime.now().isoformat(
             timespec="seconds"
+        )
+    
+    def add_event(
+        self,
+        title: str,
+        date: str = "日付未設定",
+        time: str = "",
+        owner: str | None = None,
+        note: str = "",
+    ) -> CommandResult:
+        title = title.strip(" 、。")
+        date = date.strip(" 、。") or "日付未設定"
+        time = time.strip()
+        note = note.strip()
+
+        if not title:
+            return CommandResult(
+                False,
+                "予定の内容が分からなかったよ。",
+            )
+
+        normalized_time = self._normalize_time(time)
+
+        if normalized_time is None:
+            return CommandResult(
+                False,
+                "予定の時刻を確認できなかったよ。",
+            )
+
+        owner_id = self._resolve_owner(owner)
+
+        event = {
+            "id": self._new_id(),
+            "owner": owner_id,
+            "title": title,
+            "date": date,
+            "time": normalized_time,
+            "note": note,
+            "created_at": self._now(),
+        }
+
+        self.state["events"].append(event)
+        self.save()
+
+        return CommandResult(
+            True,
+            (
+                f"{self._owner_name(owner_id)}の予定に"
+                f"「{self.format_event(event)}」を入れたよ。"
+            ),
+        )
+
+    def _resolve_owner(
+        self,
+        owner: str | None,
+    ) -> str:
+        if owner is None:
+            return self.current_member
+
+        owner = owner.strip()
+
+        if not owner or owner in {
+            "私",
+            "わたし",
+            "自分",
+        }:
+            return self.current_member
+
+        if owner == "家族":
+            return "家族"
+
+        owner_id = self.normalize_member_id(owner)
+        member = self.get_member(owner_id)
+        member["display_name"] = owner
+
+        return owner_id
+
+    @staticmethod
+    def _normalize_time(
+        time: str,
+    ) -> str | None:
+        if not time:
+            return ""
+
+        match = re.fullmatch(
+            r"(\d{1,2})(?::|時)(\d{0,2})",
+            time,
+        )
+
+        if not match:
+            return None
+
+        hour = int(match.group(1))
+        minute = int(match.group(2) or "0")
+
+        if not 0 <= hour <= 23:
+            return None
+
+        if not 0 <= minute <= 59:
+            return None
+
+        return f"{hour:02d}:{minute:02d}"
+
+    def show_events(
+        self,
+        owner: str | None = None,
+        limit: int = 6,
+    ) -> CommandResult:
+        if owner in {
+            "家族",
+            "全員",
+        }:
+            owner_id = None
+        elif owner is None:
+            owner_id = self.current_member
+        else:
+            owner_id = self._resolve_owner(owner)
+
+        events = self.events_for(owner_id)[:limit]
+
+        if not events:
+            return CommandResult(
+                True,
+                "今のところ予定は入っていないよ。",
+            )
+
+        formatted = "。".join(
+            self.format_event(event)
+            for event in events
+        )
+
+        return CommandResult(
+            True,
+            f"予定は、{formatted}。",
         )

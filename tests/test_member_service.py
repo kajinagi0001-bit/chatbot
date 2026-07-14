@@ -186,3 +186,12 @@ def test_unrelated_text_is_not_handled():
     assert result.handled is False
     assert state["current_member"] == "guest"
     assert save_count["value"] == 0
+
+def test_switch_member_directly():
+    service, state, save_count = make_service()
+
+    result = service.switch_member("凪")
+
+    assert result.handled is True
+    assert state["current_member"] == "凪"
+    assert save_count["value"] == 1

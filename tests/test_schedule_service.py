@@ -289,3 +289,38 @@ def test_unrelated_text_is_not_handled():
     assert result.handled is False
     assert state["events"] == []
     assert save_count["value"] == 0
+
+def test_add_event_directly():
+    service, state, save_count = make_service(
+        current_member="凪"
+    )
+
+    result = service.add_event(
+        title="歯医者",
+        date="明日",
+        time="16:00",
+    )
+
+    assert result.handled is True
+
+    event = state["events"][0]
+
+    assert event["title"] == "歯医者"
+    assert event["date"] == "明日"
+    assert event["time"] == "16:00"
+    assert event["owner"] == "凪"
+    assert save_count["value"] == 1
+
+
+def test_add_event_rejects_invalid_time():
+    service, state, save_count = make_service()
+
+    result = service.add_event(
+        title="歯医者",
+        date="明日",
+        time="25:80",
+    )
+
+    assert result.handled is False
+    assert state["events"] == []
+    assert save_count["value"] == 0

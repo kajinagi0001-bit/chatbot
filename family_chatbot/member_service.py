@@ -20,24 +20,16 @@ class MemberService:
     def current_member(self) -> str:
         return self.state["current_member"]
 
-    def handle_command(self, text: str) -> CommandResult:
+    def handle_command(
+        self,
+        text: str,
+    ) -> CommandResult:
         member_name = self._extract_member_name(text)
 
         if member_name is None:
             return CommandResult(False)
 
-        member_id = self.normalize_member_id(member_name)
-        member = self.get_member(member_id)
-
-        member["display_name"] = member_name
-        self.state["current_member"] = member_id
-
-        self.save()
-
-        return CommandResult(
-            True,
-            f"{member_name}さんとして話すね。",
-        )
+        return self.switch_member(member_name)
 
     def get_member(self, member_id: str) -> dict:
         members = self.state["members"]
@@ -127,3 +119,30 @@ class MemberService:
             "notes": [],
             "preferences": [],
         }
+
+    def switch_member(
+        self,
+        member_name: str,
+    ) -> CommandResult:
+        member_name = member_name.strip(" 、。")
+
+        if not member_name:
+            return CommandResult(
+                False,
+                "名前が分からなかったよ。",
+            )
+
+        member_id = self.normalize_member_id(
+            member_name
+        )
+        member = self.get_member(member_id)
+
+        member["display_name"] = member_name
+        self.state["current_member"] = member_id
+
+        self.save()
+
+        return CommandResult(
+            True,
+            f"{member_name}さんとして話すね。",
+        )

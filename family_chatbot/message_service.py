@@ -89,9 +89,9 @@ class MessageService:
 
         self.save()
 
-        return CommandResult(
-            True,
-            f"{recipient_name}さんへの伝言を預かったよ。",
+        return self.send_message(
+            recipient=recipient_name,
+            body=body,
         )
 
     def _handle_receive(
@@ -136,12 +136,7 @@ class MessageService:
 
         self.save()
 
-        return CommandResult(
-            True,
-            "伝言は、"
-            + "。".join(formatted_messages)
-            + "。",
-        )
+        return self.receive_messages()
 
     def _member_name(self, member_id: str) -> str:
         return self.get_member(
@@ -159,4 +154,84 @@ class MessageService:
     def _now() -> str:
         return datetime.now().isoformat(
             timespec="seconds"
+        )
+
+    def send_message(
+        self,
+        recipient: str,
+        body: str,
+    ) -> CommandResult:
+        recipient = recipient.strip(" 、。")
+        body = body.strip(" 、。")
+
+        if not recipient:
+            return CommandResult(
+                False,
+                "伝言を渡す相手が分からなかったよ。",
+            )
+
+        if not body:
+            return CommandResult(
+                False,
+                "伝言の内容が分からなかったよ。",
+            )
+
+        recipient_id = self.normalize_member_id(
+            recipient
+        )
+
+        member = self.get_member(recipient_id)
+        member["display_name"] = recipient
+
+        self.state["messages"].append(
+            {
+                "id": self._new_id(),
+                "from": self.current_member,
+                "to": recipient_id,
+                "text": body,
+                "delivered": False,
+                "created_at": self._now(),
+            }
+        )
+
+        self.save()
+
+        return CommandResult(
+            True,
+            f"{recipient}さんへの伝言を預かったよ。",
+        )
+    
+    def receive_messages(self) -> CommandResult:
+        messages = self.pending_messages_for(
+            self.current_member
+        )
+
+        if not messages:
+            return CommandResult(
+                True,
+                "今のところ伝言はないよ。",
+            )
+
+        formatted_messages = []
+
+        for message in messages:
+            sender_name = self._member_name(
+                message["from"]
+            )
+
+            formatted_messages.append(
+                f"{sender_name}さんから、"
+                f"「{message['text']}」"
+            )
+
+            message["delivered"] = True
+            message["delivered_at"] = self._now()
+
+        self.save()
+
+        return CommandResult(
+            True,
+            "伝言は、"
+            + "。".join(formatted_messages)
+            + "。",
         )
