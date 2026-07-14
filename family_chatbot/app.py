@@ -4,7 +4,7 @@ import time
 
 from .audio import play_audio
 from .config import AppConfig, DEFAULT_SYSTEM_PROMPT
-from .family import FamilyStore
+from .family_storage import create_family_store
 from .llm import ChatBrain
 from .memory import ConversationMemory
 from .search import WebSearch
@@ -45,7 +45,7 @@ def main() -> None:
         return
 
     memory = ConversationMemory(config.conversation_log_path, DEFAULT_SYSTEM_PROMPT)
-    family = FamilyStore.load(config.family_state_path)
+    family = create_family_store()
     brain = ChatBrain(config, memory, WebSearch(config), family)
     tts = VoicevoxTTS(config)
     listener = SpeechListener(config)

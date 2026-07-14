@@ -1,11 +1,11 @@
-import re
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
 from .command_result import CommandResult
-from .family_repository import FamilyRepository
+from .family_repository import (
+    FamilyRepository,
+    FamilyRepositoryProtocol,
+)
 
 from .family_context import FamilyContextBuilder
 from .member_service import MemberService
@@ -20,14 +20,33 @@ from .shopping_service import ShoppingService
 class FamilyStore:
     path: Path
     state: dict = field(default_factory=dict)
+    repository: FamilyRepositoryProtocol | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
 
     @classmethod
-    def load(cls, path: Path) -> "FamilyStore":
-        repository = FamilyRepository(path)
-        state = repository.load()
+    def load(
+        cls,
+        path: Path,
+        repository: FamilyRepositoryProtocol | None = None,
+    ) -> "FamilyStore":
+        actual_repository = (
+            repository
+            if repository is not None
+            else FamilyRepository(path)
+        )
 
-        store = cls(path=path, state=state)
+        state = actual_repository.load()
+
+        store = cls(
+            path=path,
+            state=state,
+            repository=actual_repository,
+        )
         store._ensure_shape()
+
         return store
 
     @property
@@ -35,8 +54,12 @@ class FamilyStore:
         return self._member_service().current_member
 
     def save(self) -> None:
-        repository = FamilyRepository(self.path)
-        repository.save(self.state)
+        if self.repository is None:
+            self.repository = FamilyRepository(
+                self.path
+            )
+
+        self.repository.save(self.state)
 
     def context_for_prompt(self) -> str:
         return self._context_builder().build()
@@ -96,15 +119,9 @@ class FamilyStore:
         self._member(self.state["current_member"])
 
     def _member(self, member_id: str) -> dict:
-        members = self.state["members"]
-        if member_id not in members:
-            members[member_id] = {
-                "display_name": member_id,
-                "preferences": [],
-                "notes": [],
-                "created_at": self._now(),
-            }
-        return members[member_id]
+        return self._member_service().get_member(
+            member_id
+        )
 
     def _handle_member_switch(
         self,
@@ -148,13 +165,6 @@ class FamilyStore:
             return CommandResult(True, "登録されている家族は、" + "、".join(names) + "だよ。")
         return CommandResult(False)
 
-
-    def _extract_after_keywords(self, text: str, keywords: list[str]) -> str | None:
-        for keyword in keywords:
-            if keyword in text:
-                return text.split(keyword, 1)[1].strip(" 、。")
-        return None
-
     def _format_event(
         self,
         event: dict,
@@ -162,20 +172,7 @@ class FamilyStore:
         return self._schedule_service().format_event(event)
 
     def _normalize_member_id(self, name: str) -> str:
-        return re.sub(r"\s+", "_", name.strip().lower())
-
-    def _append_unique(self, items: list[str], value: str) -> None:
-        if value and value not in items:
-            items.append(value)
-
-    def _join_or_none(self, values: list[str]) -> str:
-        return "、".join(values[:8]) if values else "まだなし"
-
-    def _new_id(self) -> str:
-        return uuid.uuid4().hex[:12]
-
-    def _now(self) -> str:
-        return datetime.now().isoformat(timespec="seconds")
+        return self._member_service().normalize_member_id(name)
     
     def _schedule_service(self) -> ScheduleService:
         return ScheduleService(

@@ -95,7 +95,12 @@ CHATBOT_TTS_SPEED=1.1
 
 ## 家族機能
 
-家族データは `data/family_state.json` に保存されます。このフォルダはGit管理から除外しています。
+家族データは `data/family.db` に保存されます。
+旧バージョンの `data/family_state.json` が存在する場合は、
+初回起動時にSQLiteへ自動移行されます。
+移行前のJSONは
+`data/family_state.pre-sqlite.json`
+としてバックアップされます。
 
 使える言い方の例:
 

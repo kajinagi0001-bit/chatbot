@@ -5,5 +5,8 @@ venv/
 .env
 conversation_log.json
 data/
+*.db
+*.db-shm
+*.db-wal
 family_chatbot_output.wav
 chatbot.egg-info
