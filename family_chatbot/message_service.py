@@ -69,26 +69,6 @@ class MessageService:
         if not recipient_name or not body:
             return CommandResult(False)
 
-        recipient_id = self.normalize_member_id(
-            recipient_name
-        )
-
-        recipient = self.get_member(recipient_id)
-        recipient["display_name"] = recipient_name
-
-        self.state["messages"].append(
-            {
-                "id": self._new_id(),
-                "from": self.current_member,
-                "to": recipient_id,
-                "text": body,
-                "delivered": False,
-                "created_at": self._now(),
-            }
-        )
-
-        self.save()
-
         return self.send_message(
             recipient=recipient_name,
             body=body,
@@ -108,33 +88,6 @@ class MessageService:
             ]
         ):
             return CommandResult(False)
-
-        messages = self.pending_messages_for(
-            self.current_member
-        )
-
-        if not messages:
-            return CommandResult(
-                True,
-                "今のところ伝言はないよ。",
-            )
-
-        formatted_messages = []
-
-        for message in messages:
-            sender_name = self._member_name(
-                message["from"]
-            )
-
-            formatted_messages.append(
-                f"{sender_name}さんから、"
-                f"「{message['text']}」"
-            )
-
-            message["delivered"] = True
-            message["delivered_at"] = self._now()
-
-        self.save()
 
         return self.receive_messages()
 
